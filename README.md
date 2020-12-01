@@ -1,1 +1,1 @@
-# mega_bug_bounty.github.io
+github.io
