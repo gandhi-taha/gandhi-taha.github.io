@@ -1,6 +1,6 @@
 # gandhi-taha.github.io
 
-My personal site: what I work on, where I've worked, and links to my projects.
+My personal site and resume: where I work, what I build, and links to my projects. The print stylesheet turns the page into a plain resume (Save as PDF).
 
 - `/` is this repo: plain HTML, CSS and a little JavaScript, no build step.
 - `/security/` is built from the [security](https://github.com/gandhi-taha/security) repo.
