@@ -1,53 +1,122 @@
-// Small bits of life for the page: local time, theme, live GitHub list, section highlight, quick menu.
+// gandhi-taha.github.io: theme, scroll effects, live bits and the quick menu.
 (() => {
-  const $ = s => document.querySelector(s);
+  const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+  const root = document.documentElement;
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const store = {get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }};
 
   // The 2020 site registered a service worker at the root. Remove it so nobody gets stuck on a cached old page.
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => { if (new URL(r.scope).pathname === '/') r.unregister(); })).catch(() => {});
 
-  // Local time in Luxembourg
+  // Local time in Luxembourg, the year, time at the current company
   const clock = $('#clock');
   const tick = () => { clock.textContent = new Intl.DateTimeFormat('en-GB', {timeZone:'Europe/Luxembourg', hour:'2-digit', minute:'2-digit'}).format(new Date()); };
   tick(); setInterval(tick, 15000);
   $('#year').textContent = new Date().getFullYear();
-
-  // How long at the current company
-  document.querySelectorAll('[data-since]').forEach(el => {
+  $$('[data-since]').forEach(el => {
     const [y, m] = el.dataset.since.split('-').map(Number), n = new Date();
     const months = (n.getFullYear() - y) * 12 + n.getMonth() + 1 - m, yrs = Math.floor(months / 12), mo = months % 12;
     el.textContent = ' · ' + [yrs ? `${yrs} yr${yrs > 1 ? 's' : ''}` : '', mo ? `${mo} mo` : ''].filter(Boolean).join(' ');
   });
 
-  // Theme: follows the system until you pick one
-  const root = document.documentElement;
-  const isDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-  const paintMeta = () => document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.content = isDark() ? '#0c0d0f' : '#f8f7f4');
-  $('#theme').addEventListener('click', () => { root.dataset.theme = isDark() ? 'light' : 'dark'; store.set('theme', root.dataset.theme); paintMeta(); });
-  if (root.dataset.theme) paintMeta();
+  // Theme: white by default, dark when you ask for it. The new theme grows out of the button as a circle.
+  const themeBtn = $('#theme');
+  const isDark = () => root.dataset.theme === 'dark';
+  const paint = () => { $('meta[name="theme-color"]').content = isDark() ? '#09090b' : '#ffffff'; themeBtn.setAttribute('aria-label', isDark() ? 'Switch to light theme' : 'Switch to dark theme'); };
+  const setTheme = dark => { if (dark) root.dataset.theme = 'dark'; else delete root.dataset.theme; store.set('site-theme', dark ? 'dark' : 'light'); paint(); };
+  themeBtn.addEventListener('click', () => {
+    const next = !isDark();
+    if (!document.startViewTransition || calm) return setTheme(next);
+    const r = themeBtn.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const end = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    document.startViewTransition(() => setTheme(next)).ready.then(() => {
+      root.animate({clipPath:[`circle(0px at ${x}px ${y}px)`, `circle(${end}px at ${x}px ${y}px)`]}, {duration:600, easing:'cubic-bezier(.4,0,.2,1)', pseudoElement:'::view-transition-new(root)'});
+    }).catch(() => {});
+  });
+  paint();
 
-  // Highlight the section you're reading in the side menu
-  const links = [...document.querySelectorAll('.nav a')];
-  if ('IntersectionObserver' in window) {
-    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + e.target.id)); }), {rootMargin:'-40% 0px -55% 0px'});
-    document.querySelectorAll('main section[id]').forEach(s => io.observe(s));
+  // Header turns to glass once you scroll; the nav follows the section you're reading
+  const bar = $('#top');
+  const onScroll = () => bar.classList.toggle('scrolled', scrollY > 10);
+  addEventListener('scroll', onScroll, {passive:true}); onScroll();
+  const links = $$('.nav a');
+  const io = 'IntersectionObserver' in window;
+  if (io) {
+    const spy = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + e.target.id)); }), {rootMargin:'-45% 0px -50% 0px'});
+    $$('main section[id]').forEach(s => spy.observe(s));
+  }
+
+  // Little visuals for the numbers
+  const fill = (sel, n, f) => { const el = $(sel); if (el) el.innerHTML = Array.from({length:n}, (_, i) => f(i)).join(''); };
+  const heights = [.42,.55,.38,.62,.5,.71,.46,.66,.58,.8,.52,.74,.61,.86,.57,.69,.92,.64,.78,.88,.7,.95,.83,1];
+  fill('.bars', 24, i => `<i style="--s:${heights[i]};--i:${i}"${i > 20 ? ' class="top"' : ''}></i>`);
+  fill('.dots', 21, i => `<i style="--i:${i}"${i % 4 === 0 || i > 16 ? ' class="hot"' : ''}></i>`);
+  const ring = $('.ring'); if (ring) ring.insertAdjacentHTML('afterbegin', Array.from({length:12}, (_, i) => `<i style="--i:${i}"></i>`).join(''));
+  fill('.cal', 12, i => `<i${i <= new Date().getMonth() ? ' class="on"' : ''}></i>`);
+  fill('.wave', 44, i => `<i style="--i:${i};--s:${(.25 + .75 * Math.abs(Math.sin(i * .55) * Math.cos(i * .21))).toFixed(2)}"></i>`);
+
+  // Count numbers up the first time they come into view
+  const countUp = el => {
+    const to = +el.dataset.count; if (calm) return;
+    const t0 = performance.now(), dur = 1300;
+    const step = t => { const p = Math.min(1, (t - t0) / dur); el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(step); };
+    el.textContent = '0'; requestAnimationFrame(step);
+  };
+
+  // Things slide in as you reach them
+  const reveal = el => { el.classList.add('in'); el.querySelectorAll('[data-count]').forEach(countUp); };
+  if (io && !calm) {
+    const ro = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { reveal(e.target); ro.unobserve(e.target); } }), {threshold:.12, rootMargin:'0px 0px -6% 0px'});
+    $$('[data-reveal]').forEach(el => ro.observe(el));
+  } else $$('[data-reveal]').forEach(el => el.classList.add('in'));
+
+  // The console types out this year's work
+  const lines = $$('#console .ln');
+  if (calm || !lines.length) lines.forEach(l => l.classList.add('on'));
+  else {
+    let i = 0;
+    const next = () => {
+      const l = lines[i++]; if (!l) return;
+      const cmd = !l.classList.contains('out');
+      l.classList.add('on'); if (cmd && l.querySelector('.cm')) l.classList.add('typing');
+      setTimeout(next, cmd ? 620 : 240);
+    };
+    setTimeout(next, 700);
+  }
+
+  // A soft light follows the pointer over cards and the hero
+  if (matchMedia('(hover: hover)').matches && !calm) {
+    addEventListener('pointermove', e => {
+      const c = e.target.closest && e.target.closest('.card');
+      if (c) { const r = c.getBoundingClientRect(); c.style.setProperty('--mx', (e.clientX - r.left) + 'px'); c.style.setProperty('--my', (e.clientY - r.top) + 'px'); }
+    }, {passive:true});
+    const hero = $('.hero');
+    hero.addEventListener('pointermove', e => { const r = hero.getBoundingClientRect(); hero.style.setProperty('--hx', (e.clientX - r.left) + 'px'); hero.style.setProperty('--hy', (e.clientY - r.top) + 'px'); }, {passive:true});
+  }
+
+  // The timeline line fills as you read down it
+  const tl = $('#timeline');
+  if (tl) {
+    let ticking = false;
+    const prog = () => { ticking = false; const r = tl.getBoundingClientRect(); const p = Math.min(1, Math.max(0, (innerHeight * .6 - r.top) / r.height)); tl.style.setProperty('--p', p.toFixed(3)); };
+    addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(prog); } }, {passive:true}); prog();
   }
 
   // Save as PDF uses the print stylesheet (a plain resume, no contact details)
-  const earlier = document.querySelector('.earlier'); let wasOpen = false;
-  addEventListener('beforeprint', () => { if (earlier) { wasOpen = earlier.open; earlier.open = true; } });
+  const earlier = $('.earlier'); let wasOpen = false;
+  addEventListener('beforeprint', () => { $$('[data-reveal]').forEach(el => el.classList.add('in')); if (earlier) { wasOpen = earlier.open; earlier.open = true; } });
   addEventListener('afterprint', () => { if (earlier) earlier.open = wasOpen; });
-  document.querySelectorAll('[data-print]').forEach(b => b.addEventListener('click', () => print()));
+  $$('[data-print]').forEach(b => b.addEventListener('click', () => print()));
 
-  // Picked repositories get their language, last update and description from the GitHub API (cached for an hour)
+  // Picked repositories get their language from the GitHub API (cached for an hour)
   const COLORS = {Python:'#3572A5', 'Jupyter Notebook':'#DA5B0B', JavaScript:'#f1e05a', TypeScript:'#3178c6', HTML:'#e34c26', CSS:'#563d7c', Svelte:'#ff3e00', C:'#555555', Shell:'#89e051'};
   const rel = d => { const s = (new Date(d) - Date.now()) / 1000, f = new Intl.RelativeTimeFormat('en', {numeric:'auto'}); for (const [u, n] of [['year', 31536000], ['month', 2592000], ['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]]) if (Math.abs(s) >= n) return f.format(Math.round(s / n), u); return 'just now'; };
-  const paint = repos => {
+  const paintRepos = repos => {
     const by = Object.fromEntries(repos.map(r => [r.name, r]));
     const site = by['gandhi-taha.github.io'];
     if (site) $('#updated').textContent = 'Updated ' + rel(site.pushed_at);
-    document.querySelectorAll('#repos [data-repo]').forEach(li => {
+    $$('#repos [data-repo]').forEach(li => {
       const r = by[li.dataset.repo]; if (!r) return;
       if (r.language) li.querySelector('.rm').innerHTML = `<span class="lang" style="background:${COLORS[r.language] || '#999'}"></span>${esc(r.language)}`;
       if (r.description) li.querySelector('.rd').textContent = r.description;
@@ -55,23 +124,23 @@
   };
   const KEY = 'gh-repos-v2';
   let cached = null; try { cached = JSON.parse(store.get(KEY)); } catch (e) {}
-  if (cached && Date.now() - cached.t < 36e5) paint(cached.d);
+  if (cached && Date.now() - cached.t < 36e5) paintRepos(cached.d);
   else fetch('https://api.github.com/users/gandhi-taha/repos?sort=pushed&per_page=100', {headers:{Accept:'application/vnd.github+json'}})
     .then(r => r.ok ? r.json() : Promise.reject(r.status))
-    .then(d => { const slim = d.map(({name, html_url, description, language, pushed_at, fork, archived}) => ({name, html_url, description, language, pushed_at, fork, archived})); store.set(KEY, JSON.stringify({t:Date.now(), d:slim})); paint(slim); })
-    .catch(() => { if (cached) paint(cached.d); });
+    .then(d => { const slim = d.map(({name, html_url, description, language, pushed_at, fork, archived}) => ({name, html_url, description, language, pushed_at, fork, archived})); store.set(KEY, JSON.stringify({t:Date.now(), d:slim})); paintRepos(slim); })
+    .catch(() => { if (cached) paintRepos(cached.d); });
 
-  // Quick menu: Ctrl/Cmd K or "/" on desktop, the search button on phones
+  // Quick menu: Ctrl/Cmd K or "/" on desktop, the search button anywhere
   const items = [
-    {t:'About', h:'Section', go:'#about'},
+    {t:'Impact in 2026', h:'Section', go:'#impact'},
     {t:'Experience', h:'Section', go:'#experience'},
     {t:'Projects', h:'Section', go:'#projects'},
     {t:'Notes on AI security', h:'Section', go:'#notes'},
-    {t:'Education', h:'Section', go:'#education'},
-    {t:'Skills and languages', h:'Section', go:'#skills'},
+    {t:'Education and certificates', h:'Section', go:'#about'},
+    {t:'Skills', h:'Section', go:'#skills'},
     {t:'Contact', h:'Section', go:'#contact'},
-    {t:'Save resume as PDF', h:'Print', go:() => document.querySelector('[data-print]').click()},
-    {t:'Switch theme', h:'Light / dark', go:() => $('#theme').click()},
+    {t:'Download résumé (PDF)', h:'Print', go:() => print()},
+    {t:'Switch light / dark', h:'Theme', go:() => themeBtn.click()},
     {t:'Planner', h:'/plan · sign-in', go:'plan/'},
     {t:'French course', h:'/french', go:'french/'},
     {t:'Security notes', h:'/security', go:'security/'},
@@ -87,7 +156,7 @@
   const draw = () => { ul.innerHTML = shown.length ? shown.map((it, i) => `<li role="option" id="o${i}" data-i="${i}" class="${i === sel ? 'on' : ''}" aria-selected="${i === sel}">${esc(it.t)}<span>${esc(it.h)}</span></li>`).join('') : '<li class="empty">Nothing found</li>'; input.setAttribute('aria-activedescendant', shown.length ? 'o' + sel : ''); const on = ul.querySelector('.on'); if (on) on.scrollIntoView({block:'nearest'}); };
   const open = () => { lastFocus = document.activeElement; box.classList.remove('hide'); input.value = ''; shown = items; sel = 0; draw(); requestAnimationFrame(() => input.focus()); };
   const close = () => { box.classList.add('hide'); if (lastFocus) lastFocus.focus(); };
-  const run = i => { const it = shown[i]; if (!it) return; close(); if (typeof it.go === 'function') return it.go(); if (it.go.startsWith('#')) { const el = document.querySelector(it.go); if (el) { el.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'}); history.replaceState(null, '', it.go); } return; } location.href = it.go; };
+  const run = i => { const it = shown[i]; if (!it) return; close(); if (typeof it.go === 'function') return it.go(); if (it.go.startsWith('#')) { const el = $(it.go); if (el) { el.scrollIntoView({behavior:calm ? 'auto' : 'smooth'}); history.replaceState(null, '', it.go); } return; } location.href = it.go; };
   $('#cmd-open').addEventListener('click', open);
   box.addEventListener('click', e => { const li = e.target.closest('li[data-i]'); if (li) run(+li.dataset.i); else if (e.target === box) close(); });
   input.addEventListener('input', () => { const q = input.value.trim().toLowerCase(); shown = items.filter(it => (it.t + ' ' + it.h).toLowerCase().includes(q)); sel = 0; draw(); });
