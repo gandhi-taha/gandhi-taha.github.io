@@ -1,3 +1,4 @@
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /plan/
 Sitemap: https://gandhi-taha.github.io/sitemap.xml
