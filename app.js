@@ -9,7 +9,7 @@
 
   // Local time in Luxembourg
   const clock = $('#clock');
-  const tick = () => { clock.textContent = 'Luxembourg ' + new Intl.DateTimeFormat('en-GB', {timeZone:'Europe/Luxembourg', hour:'2-digit', minute:'2-digit'}).format(new Date()); };
+  const tick = () => { clock.textContent = new Intl.DateTimeFormat('en-GB', {timeZone:'Europe/Luxembourg', hour:'2-digit', minute:'2-digit'}).format(new Date()); };
   tick(); setInterval(tick, 15000);
   $('#year').textContent = new Date().getFullYear();
 
@@ -23,14 +23,11 @@
   // Theme: follows the system until you pick one
   const root = document.documentElement;
   const isDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-  const paintMeta = () => document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.content = isDark() ? '#0e0f11' : '#fafaf9');
+  const paintMeta = () => document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.content = isDark() ? '#0c0d0f' : '#f8f7f4');
   $('#theme').addEventListener('click', () => { root.dataset.theme = isDark() ? 'light' : 'dark'; store.set('theme', root.dataset.theme); paintMeta(); });
   if (root.dataset.theme) paintMeta();
 
-  // Header border once you scroll; highlight the section you're reading
-  const top = $('#top');
-  const onScroll = () => top.classList.toggle('scrolled', scrollY > 8);
-  addEventListener('scroll', onScroll, {passive:true}); onScroll();
+  // Highlight the section you're reading in the side menu
   const links = [...document.querySelectorAll('.nav a')];
   if ('IntersectionObserver' in window) {
     const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + e.target.id)); }), {rootMargin:'-40% 0px -55% 0px'});
@@ -52,7 +49,7 @@
     if (site) $('#updated').textContent = 'Updated ' + rel(site.pushed_at);
     document.querySelectorAll('#repos [data-repo]').forEach(li => {
       const r = by[li.dataset.repo]; if (!r) return;
-      li.querySelector('.rm').innerHTML = `${r.language ? `<span class="lang" style="background:${COLORS[r.language] || '#999'}"></span>${esc(r.language)} · ` : ''}${rel(r.pushed_at)}`;
+      if (r.language) li.querySelector('.rm').innerHTML = `<span class="lang" style="background:${COLORS[r.language] || '#999'}"></span>${esc(r.language)}`;
       if (r.description) li.querySelector('.rd').textContent = r.description;
     });
   };
@@ -66,11 +63,12 @@
 
   // Quick menu: Ctrl/Cmd K or "/" on desktop, the search button on phones
   const items = [
+    {t:'About', h:'Section', go:'#about'},
     {t:'Experience', h:'Section', go:'#experience'},
     {t:'Projects', h:'Section', go:'#projects'},
     {t:'Notes on AI security', h:'Section', go:'#notes'},
-    {t:'Skills', h:'Section', go:'#skills'},
-    {t:'Education and more', h:'Section', go:'#about'},
+    {t:'Education', h:'Section', go:'#education'},
+    {t:'Skills and languages', h:'Section', go:'#skills'},
     {t:'Contact', h:'Section', go:'#contact'},
     {t:'Save resume as PDF', h:'Print', go:() => document.querySelector('[data-print]').click()},
     {t:'Switch theme', h:'Light / dark', go:() => $('#theme').click()},
